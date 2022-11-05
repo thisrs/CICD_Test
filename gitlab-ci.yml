@@ -1,0 +1,56 @@
+stages:
+  - build
+  - style
+  - test
+  - deploy
+
+build_cat_grep:
+  tags:
+    - api
+  stage: build
+  script:
+    - cd src/cat; make
+    - cd ../grep; make
+    - cd ../../
+    - mkdir -p release
+    - rm -rf release/*
+    - mv src/cat/s21_cat src/grep/s21_grep release
+  artifacts:
+    paths:
+    - release/*
+    expire_in: 30 days
+
+code_style:
+  tags:
+    - api
+  stage: style
+  script:
+    - clang-format -i src/cat/*.c src/grep/*.c
+
+
+testing:
+  tags:
+    - api
+  stage: test
+  needs:
+    - build_cat_grep
+    - code_style
+  script:
+    - cd src/cat; make
+    - ./cat.sh  | /usr/bin/grep -e "FAIL:\ " | /usr/bin/grep -o "[0-9]*" | /usr/bin/grep -q "^0"
+    - cd ../grep; make
+    - ./grep.sh  | /usr/bin/grep -e "FAIL:\ " | /usr/bin/grep -o "[0-9]*" | /usr/bin/grep -q "^0"
+
+deploy:
+  tags:
+    - api
+  stage: deploy  
+  dependencies:
+    - build_cat_grep
+  needs:
+    - build_cat_grep
+    - code_style
+    - testing
+  script:
+    - cd src; bash scp.sh
+    - echo "CD_STATUS=\"CD OKAY\""
